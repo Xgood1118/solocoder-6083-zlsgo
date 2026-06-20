@@ -1,0 +1,14 @@
+{
+  "core_features": [
+    "znet Web framework (HTTP server with routing, middleware, group routing, template engine, SSE, JSON-RPC support)",
+    "zhttp HTTP client (GET/POST/PUT/DELETE etc., fluent request builder with object pool, retry mechanism, proxy support, file upload/download with progress)",
+    "zlog logging library (multiple log levels, color output, file archiving, module-level independent config, Dump/Track/Stack debug tools)",
+    "zjson JSON processing (Marshal/Unmarshal with type conversion, Get/Set on raw JSON paths, array/slice helpers)",
+    "zcache in-memory cache (TTL expiration, LRU eviction, namespace isolation)",
+    "zdi dependency injection container (struct tag binding, singleton/transient scoping, pre-invocation hooks)",
+    "zfile file operations (path manipulation, file detection, directory traversal, file locking)",
+    "zvalid data validation (struct tag validation, custom rules, chainable validators with error aggregation)",
+    "zpool goroutine pool (worker pool with task queue, dynamic scaling, context-aware lifecycle)",
+    "zerror error handling (stack trace attachment, multi-error aggregation, typed error wrapping)"
+  ]
+}
