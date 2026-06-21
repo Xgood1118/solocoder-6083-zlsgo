@@ -1,0 +1,4 @@
+1. go build ./... 整个库编译失败。
+2. JSON 日志输出里有个函数把 void 当返回值用。
+3. znet / zhttp / limiter 跟着全 build failed，新功能没法验证。
+检查修复一下。

@@ -112,6 +112,9 @@ type (
 		// writeBefore contains functions that are called before writing a log message
 		// and can prevent the message from being logged by returning false
 		writeBefore []func(level int, log string) bool
+		// structuredHooks contains functions that are called before writing JSON log messages
+		// to inject or modify fields
+		structuredHooks []StructuredHook
 		// calldDepth controls how many stack frames to ascend to identify the calling function
 		calldDepth int
 		// level is the current minimum log level that will be output
@@ -293,6 +296,10 @@ func (log *Logger) outputWriter(level int) io.Writer {
 }
 
 func (log *Logger) outPut(level int, s string, isWrap bool, calldDepth int, prefixText ...string) error {
+	if log.flag&BitJSON != 0 {
+		return log.outputJSON(level, s, isWrap, calldDepth, prefixText...)
+	}
+
 	if log.writeBefore != nil && len(s) > 0 {
 		p := s
 		if isWrap && len(p) > 0 && p[len(p)-1] == '\n' {
