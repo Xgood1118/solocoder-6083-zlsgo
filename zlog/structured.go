@@ -1,13 +1,9 @@
 package zlog
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"io"
 	"runtime"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/sohaha/zlsgo/ztime"
@@ -318,49 +314,4 @@ func AddHook(hook StructuredHook) *Logger {
 
 func EnableJSON() *Logger {
 	return log.EnableJSON()
-}
-
-type jsonBuffPool struct {
-	pool sync.Pool
-}
-
-var jsonBufPool = &jsonBuffPool{
-	pool: sync.Pool{
-		New: func() interface{} {
-			return new(bytes.Buffer)
-		},
-	},
-}
-
-func (p *jsonBuffPool) Get() *bytes.Buffer {
-	return p.pool.Get().(*bytes.Buffer)
-}
-
-func (p *jsonBuffPool) Put(b *bytes.Buffer) {
-	b.Reset()
-	p.pool.Put(b)
-}
-
-func jsonEscapeString(w io.Writer, s string) {
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch c {
-		case '"':
-			_, _ = w.Write([]byte(`\"`))
-		case '\\':
-			_, _ = w.Write([]byte(`\\`))
-		case '\n':
-			_, _ = w.Write([]byte(`\n`))
-		case '\r':
-			_, _ = w.Write([]byte(`\r`))
-		case '\t':
-			_, _ = w.Write([]byte(`\t`))
-		default:
-			if c < 0x20 {
-				_, _ = fmt.Fprintf(w, `\u%04x`, c)
-			} else {
-				_ = writeByte(w, c)
-			}
-		}
-	}
 }

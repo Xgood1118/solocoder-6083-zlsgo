@@ -256,79 +256,41 @@ func (e *Engine) Do(method, rawurl string, vs ...interface{}) (resp *Res, err er
 	}
 
 	var (
-		queryParam     param
-		formParam      param
-		uploads        []FileUpload
-		uploadProgress UploadProgress
-		progress       func(int64, int64)
-		delayedFunc    []func()
-		lastFunc       []func()
-		bodyForHash    []byte
+		queryParam  param
+		formParam   param
+		bodyForHash []byte
 	)
 
-	req := &http.Request{
-		Method:     strings.ToUpper(method),
-		Header:     make(http.Header, 8),
-		Proto:      "Engine/1.1",
-		ProtoMajor: 1,
-		ProtoMinor: 1,
+	upperMethod := strings.ToUpper(method)
+	hashReq := &http.Request{
+		Method: upperMethod,
+		Header: make(http.Header, 8),
 	}
+	hashResp := &Res{req: hashReq, r: e}
 
-	tempResp := &Res{req: req, r: e}
-	if e.getUserAgent != nil {
-		ua := e.getUserAgent()
-		if ua == "" {
-			ua = UserAgentLists[zstring.RandInt(0, len(UserAgentLists)-1)]
-		}
-		req.Header.Add("User-Agent", ua)
-	}
 	for _, v := range vs {
 		switch vv := v.(type) {
-		case NoRedirect:
-			if vv {
-				r := e.Client().CheckRedirect
-				e.Client().CheckRedirect = func(_ *http.Request, via []*http.Request) error {
-					return http.ErrUseLastResponse
-				}
-				defer func() {
-					e.Client().CheckRedirect = r
-				}()
-			}
-		case CustomReq:
-			vv(req)
-		case Header:
-			for key, value := range vv {
-				req.Header.Add(key, value)
-			}
-		case http.Header:
-			for key, values := range vv {
-				for _, value := range values {
-					req.Header.Add(key, value)
-				}
-			}
 		case *bodyJson:
-			fn, err := setBodyJson(req, tempResp, e.jsonEncOpts, vv.v)
+			_, err := setBodyJson(hashReq, hashResp, e.jsonEncOpts, vv.v)
 			if err != nil {
 				return nil, err
 			}
-			delayedFunc = append(delayedFunc, fn)
-			bodyForHash = tempResp.requesterBody
+			bodyForHash = hashResp.requesterBody
 		case *bodyXml:
-			fn, err := setBodyXml(req, tempResp, e.xmlEncOpts, vv.v)
+			_, err := setBodyXml(hashReq, hashResp, e.xmlEncOpts, vv.v)
 			if err != nil {
 				return nil, err
 			}
-			delayedFunc = append(delayedFunc, fn)
-			bodyForHash = tempResp.requesterBody
+			bodyForHash = hashResp.requesterBody
 		case url.Values:
 			p := param{vv}
-			if method == "GET" || method == "HEAD" {
+			if upperMethod == "GET" || upperMethod == "HEAD" {
 				queryParam.Copy(p)
 			} else {
 				formParam.Copy(p)
 			}
 		case Param:
-			if method == "GET" || method == "HEAD" {
+			if upperMethod == "GET" || upperMethod == "HEAD" {
 				queryParam.Adds(vv)
 			} else {
 				formParam.Adds(vv)
@@ -336,107 +298,35 @@ func (e *Engine) Do(method, rawurl string, vs ...interface{}) (resp *Res, err er
 		case QueryParam:
 			queryParam.Adds(vv)
 		case string:
-			setBodyBytes(req, tempResp, []byte(vv))
-			bodyForHash = tempResp.requesterBody
+			setBodyBytes(hashReq, hashResp, []byte(vv))
+			bodyForHash = hashResp.requesterBody
 		case []byte:
-			setBodyBytes(req, tempResp, vv)
-			bodyForHash = tempResp.requesterBody
+			setBodyBytes(hashReq, hashResp, vv)
+			bodyForHash = hashResp.requesterBody
 		case bytes.Buffer:
-			setBodyBytes(req, tempResp, vv.Bytes())
-			bodyForHash = tempResp.requesterBody
-		case *http.Client:
-			tempResp.client = vv
-		case FileUpload:
-			uploads = append(uploads, vv)
-		case []FileUpload:
-			uploads = append(uploads, vv...)
-		case map[string]*http.Cookie:
-			for i := range vv {
-				req.AddCookie(vv[i])
-			}
-		case *http.Cookie:
-			req.AddCookie(vv)
-		case Host:
-			req.Host = string(vv)
-		case io.Reader:
-			fn := setBodyReader(req, tempResp, vv)
-			lastFunc = append(lastFunc, fn)
-		case UploadProgress:
-			uploadProgress = vv
-		case DownloadProgress:
-			tempResp.downloadProgress = vv
-		case func(int64, int64):
-			progress = vv
-		case context.Context:
-			req = req.WithContext(vv)
-			tempResp.req = req
+			setBodyBytes(hashReq, hashResp, vv.Bytes())
+			bodyForHash = hashResp.requesterBody
 		case error:
-			return tempResp, vv
+			return hashResp, vv
 		}
 	}
 
-	if length := req.Header.Get("Content-Length"); length != "" {
-		if l, err := strconv.ParseInt(length, 10, 64); err == nil {
-			req.ContentLength = l
-		}
-	}
-
-	if len(uploads) > 0 && (req.Method == "POST" || req.Method == "PUT") {
-		var up UploadProgress
-		if uploadProgress != nil {
-			up = uploadProgress
-		} else if progress != nil {
-			up = UploadProgress(progress)
-		}
-		multipartHelper := &multipartHelper{
-			form:           formParam.Values,
-			uploads:        uploads,
-			uploadProgress: up,
-		}
-		if e.disableChunked {
-			multipartHelper.Upload(req)
-		} else {
-			multipartHelper.UploadChunke(req)
-		}
-		tempResp.multipartHelper = multipartHelper
-	} else {
-		if progress != nil {
-			tempResp.downloadProgress = DownloadProgress(progress)
-		}
-		if !formParam.Empty() {
-			if req.Body != nil {
-				queryParam.Copy(formParam)
-			} else {
-				setBodyBytes(req, tempResp, []byte(formParam.Encode()))
-				setContentType(req, "application/x-www-form-urlencoded; charset=UTF-8")
-				bodyForHash = tempResp.requesterBody
-			}
-		}
+	if !formParam.Empty() && bodyForHash == nil {
+		setBodyBytes(hashReq, hashResp, []byte(formParam.Encode()))
+		bodyForHash = hashResp.requesterBody
 	}
 
 	finalRawurl := rawurl
 	if !queryParam.Empty() {
 		paramStr := queryParam.Encode()
-		requiredSize := len(rawurl) + 1 + len(paramStr)
-
 		if strings.IndexByte(rawurl, '?') == -1 {
-			sb := zutil.GetBuff(uint(requiredSize))
-			sb.WriteString(rawurl)
-			sb.WriteByte('?')
-			sb.WriteString(paramStr)
-			finalRawurl = sb.String()
-			zutil.PutBuff(sb)
+			finalRawurl = rawurl + "?" + paramStr
 		} else {
-			sb := zutil.GetBuff(uint(requiredSize))
-			sb.WriteString(rawurl)
-			sb.WriteByte('&')
-			sb.WriteString(paramStr)
-			finalRawurl = sb.String()
-			zutil.PutBuff(sb)
+			finalRawurl = rawurl + "&" + paramStr
 		}
 	}
 
-	return dedup.Do(strings.ToUpper(method), finalRawurl, bodyForHash, func() (*Res, error) {
+	return dedup.Do(upperMethod, finalRawurl, bodyForHash, func() (*Res, error) {
 		return e.doRequest(method, rawurl, vs...)
 	})
 }

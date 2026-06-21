@@ -120,7 +120,7 @@ func TestDedupWithBody(tt *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			resp, err := e.Post(server.URL, zhttp.BodyParam{"data": "same"})
+			resp, err := e.Post(server.URL, zhttp.BodyJSON(map[string]interface{}{"data": "same"}))
 			t.NoError(err)
 			t.Equal(200, resp.StatusCode())
 		}()
@@ -145,10 +145,10 @@ func TestDedupDifferentBody(tt *testing.T) {
 		Window: 5 * time.Second,
 	})
 
-	_, err := e.Post(server.URL, zhttp.BodyParam{"data": "a"})
+	_, err := e.Post(server.URL, zhttp.BodyJSON(map[string]interface{}{"data": "a"}))
 	t.NoError(err)
 
-	_, err = e.Post(server.URL, zhttp.BodyParam{"data": "b"})
+	_, err = e.Post(server.URL, zhttp.BodyJSON(map[string]interface{}{"data": "b"}))
 	t.NoError(err)
 
 	t.Equal(int64(2), atomic.LoadInt64(&callCount))
