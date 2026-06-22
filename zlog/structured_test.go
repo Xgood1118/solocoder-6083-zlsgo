@@ -1,21 +1,21 @@
-package zlog_test
+package zlog
 
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/sohaha/zlsgo"
-	"github.com/sohaha/zlsgo/zlog"
 )
 
 func TestJSONOutput(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
 	var buf bytes.Buffer
-	log := zlog.New(&buf, "json_test ", zlog.BitDefault|zlog.BitJSON)
+	log := NewZLog(&buf, "json_test ", BitDefault|BitJSON, LogDump, false, 3)
 
 	log.Info("test message")
 
@@ -39,9 +39,9 @@ func TestJSONFields(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
 	var buf bytes.Buffer
-	log := zlog.New(&buf, "", zlog.BitJSON)
+	log := NewZLog(&buf, "", BitJSON, LogDump, false, 3)
 
-	log.InfoJ("user login", zlog.JSONFields{
+	log.InfoJ("user login", JSONFields{
 		"user_id": 123,
 		"action":  "login",
 		"success": true,
@@ -61,8 +61,8 @@ func TestHookInjection(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
 	var buf bytes.Buffer
-	log := zlog.New(&buf, "", zlog.BitJSON)
-	log.AddHook(func(level int, msg string, fields zlog.JSONFields) zlog.JSONFields {
+	log := NewZLog(&buf, "", BitJSON, LogDump, false, 3)
+	log.AddHook(func(level int, msg string, fields JSONFields) JSONFields {
 		fields["trace_id"] = "trace-123"
 		fields["service"] = "test-service"
 		return fields
@@ -83,9 +83,9 @@ func TestHookModify(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
 	var buf bytes.Buffer
-	log := zlog.New(&buf, "", zlog.BitJSON)
-	log.AddHook(func(level int, msg string, fields zlog.JSONFields) zlog.JSONFields {
-		if level == zlog.LogWarn {
+	log := NewZLog(&buf, "", BitJSON, LogDump, false, 3)
+	log.AddHook(func(level int, msg string, fields JSONFields) JSONFields {
+		if level == LogWarn {
 			fields["alert"] = true
 		}
 		return fields
@@ -104,13 +104,13 @@ func TestMultipleHooks(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
 	var buf bytes.Buffer
-	log := zlog.New(&buf, "", zlog.BitJSON)
+	log := NewZLog(&buf, "", BitJSON, LogDump, false, 3)
 
-	log.AddHook(func(level int, msg string, fields zlog.JSONFields) zlog.JSONFields {
+	log.AddHook(func(level int, msg string, fields JSONFields) JSONFields {
 		fields["hook1"] = "value1"
 		return fields
 	})
-	log.AddHook(func(level int, msg string, fields zlog.JSONFields) zlog.JSONFields {
+	log.AddHook(func(level int, msg string, fields JSONFields) JSONFields {
 		fields["hook2"] = "value2"
 		if v, ok := fields["hook1"]; ok && v == "value1" {
 			fields["hook_order"] = "correct"
@@ -133,19 +133,18 @@ func TestJSONLevels(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
 	levels := []struct {
-		fn   func(l *zlog.Logger, msg string)
+		fn   func(l *Logger, msg string)
 		name string
 	}{
-		{func(l *zlog.Logger, msg string) { l.Debug(msg) }, "DEBUG"},
-		{func(l *zlog.Logger, msg string) { l.Info(msg) }, "INFO"},
-		{func(l *zlog.Logger, msg string) { l.Warn(msg) }, "WARN"},
-		{func(l *zlog.Logger, msg string) { l.Error(msg) }, "ERROR"},
+		{func(l *Logger, msg string) { l.Debug(msg) }, "DEBUG"},
+		{func(l *Logger, msg string) { l.Info(msg) }, "INFO"},
+		{func(l *Logger, msg string) { l.Warn(msg) }, "WARN"},
+		{func(l *Logger, msg string) { l.Error(msg) }, "ERROR"},
 	}
 
 	for _, lv := range levels {
 		var buf bytes.Buffer
-		log := zlog.New(&buf, "", zlog.BitJSON)
-		log.SetLevel(zlog.LogDebug)
+		log := NewZLog(&buf, "", BitJSON, LogDebug, false, 3)
 
 		lv.fn(log, "level test")
 
@@ -153,7 +152,7 @@ func TestJSONLevels(tt *testing.T) {
 		var parsed map[string]interface{}
 		err := json.Unmarshal([]byte(output), &parsed)
 		t.NoError(err)
-		t.Equal(lv.name, parsed["level"], "level mismatch for "+lv.name)
+		t.Equal(lv.name, parsed["level"])
 	}
 }
 
@@ -161,21 +160,20 @@ func TestJSONJMethods(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
 	methods := []struct {
-		fn   func(l *zlog.Logger, msg string, fields ...zlog.JSONFields)
+		fn   func(l *Logger, msg string, fields ...JSONFields)
 		name string
 	}{
-		{func(l *zlog.Logger, msg string, fields ...zlog.JSONFields) { l.DebugJ(msg, fields...) }, "DEBUG"},
-		{func(l *zlog.Logger, msg string, fields ...zlog.JSONFields) { l.InfoJ(msg, fields...) }, "INFO"},
-		{func(l *zlog.Logger, msg string, fields ...zlog.JSONFields) { l.WarnJ(msg, fields...) }, "WARN"},
-		{func(l *zlog.Logger, msg string, fields ...zlog.JSONFields) { l.ErrorJ(msg, fields...) }, "ERROR"},
+		{func(l *Logger, msg string, fields ...JSONFields) { l.DebugJ(msg, fields...) }, "DEBUG"},
+		{func(l *Logger, msg string, fields ...JSONFields) { l.InfoJ(msg, fields...) }, "INFO"},
+		{func(l *Logger, msg string, fields ...JSONFields) { l.WarnJ(msg, fields...) }, "WARN"},
+		{func(l *Logger, msg string, fields ...JSONFields) { l.ErrorJ(msg, fields...) }, "ERROR"},
 	}
 
 	for _, m := range methods {
 		var buf bytes.Buffer
-		log := zlog.New(&buf, "", zlog.BitJSON)
-		log.SetLevel(zlog.LogDebug)
+		log := NewZLog(&buf, "", BitJSON, LogDebug, false, 3)
 
-		m.fn(log, "jmethod test", zlog.JSONFields{"key": m.name})
+		m.fn(log, "jmethod test", JSONFields{"key": m.name})
 
 		output := buf.String()
 		var parsed map[string]interface{}
@@ -190,7 +188,7 @@ func TestNonJSONUnchanged(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
 	var buf bytes.Buffer
-	log := zlog.New(&buf, "prefix ", zlog.BitDefault)
+	log := NewZLog(&buf, "prefix ", BitDefault, LogDump, false, 3)
 
 	log.Info("normal message")
 
@@ -205,7 +203,7 @@ func TestJSONCaller(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
 	var buf bytes.Buffer
-	log := zlog.New(&buf, "", zlog.BitJSON)
+	log := NewZLog(&buf, "", BitJSON|BitShortFile, LogDump, false, 3)
 
 	log.Info("caller test")
 
@@ -223,15 +221,15 @@ func TestJSONCaller(tt *testing.T) {
 func TestJSONConcurrent(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
-	var buf bytes.Buffer
-	log := zlog.New(&buf, "", zlog.BitJSON)
+	var buf syncBuffer
+	log := NewZLog(&buf, "", BitJSON, LogDump, false, 3)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			log.InfoJ("concurrent", zlog.JSONFields{"n": n})
+			log.InfoJ("concurrent", JSONFields{"n": n})
 		}(i)
 	}
 	wg.Wait()
@@ -250,7 +248,7 @@ func TestEnableJSON(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
 	var buf bytes.Buffer
-	log := zlog.New(&buf, "test ", zlog.BitDefault)
+	log := NewZLog(&buf, "test ", BitDefault, LogDump, false, 3)
 
 	log.Info("before json")
 	t.EqualFalse(strings.Contains(buf.String(), `"timestamp"`))
@@ -265,3 +263,22 @@ func TestEnableJSON(tt *testing.T) {
 	t.NoError(err)
 	t.Equal("after json", parsed["message"])
 }
+
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (n int, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+var _ io.Writer = (*syncBuffer)(nil)

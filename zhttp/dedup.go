@@ -26,10 +26,10 @@ type DedupConfig struct {
 }
 
 type RequestDeduplicator struct {
-	mu       sync.RWMutex
-	entries  map[string]*dedupEntry
-	config   DedupConfig
-	hasher   sync.Pool
+	mu      sync.Mutex
+	entries map[string]*dedupEntry
+	config  DedupConfig
+	hasher  sync.Pool
 }
 
 func NewRequestDeduplicator(config ...DedupConfig) *RequestDeduplicator {
@@ -45,7 +45,6 @@ func NewRequestDeduplicator(config ...DedupConfig) *RequestDeduplicator {
 		if config[0].MaxCacheSize > 0 {
 			cfg.MaxCacheSize = config[0].MaxCacheSize
 		}
-		cfg.Enabled = config[0].Enabled
 	}
 	return &RequestDeduplicator{
 		entries: make(map[string]*dedupEntry),
@@ -100,22 +99,17 @@ func (rd *RequestDeduplicator) Do(
 
 	hash := rd.computeHash(method, rawurl, body)
 
-	rd.mu.RLock()
+	rd.mu.Lock()
 	entry, exists := rd.entries[hash]
 	if exists && time.Now().After(entry.expireAt) {
-		rd.mu.RUnlock()
-		rd.mu.Lock()
-		if e, ok := rd.entries[hash]; ok && time.Now().After(e.expireAt) {
-			delete(rd.entries, hash)
-			exists = false
-			entry = nil
-		}
-		rd.mu.Unlock()
-		rd.mu.RLock()
+		delete(rd.entries, hash)
+		exists = false
+		entry = nil
 	}
-	rd.mu.RUnlock()
 
 	if exists {
+		rd.mu.Unlock()
+
 		entry.mu.Lock()
 		if entry.done {
 			res, err := cloneRes(entry.res), entry.err
@@ -130,27 +124,21 @@ func (rd *RequestDeduplicator) Do(
 		return res, err
 	}
 
-	rd.mu.Lock()
-	entry, exists = rd.entries[hash]
-	if !exists {
-		entry = &dedupEntry{
-			expireAt: time.Now().Add(rd.config.Window),
-		}
-		entry.cond = sync.NewCond(&entry.mu)
-		rd.entries[hash] = entry
-		rd.cleanup()
+	entry = &dedupEntry{
+		expireAt: time.Now().Add(rd.config.Window),
 	}
+	entry.cond = sync.NewCond(&entry.mu)
+	rd.entries[hash] = entry
+	rd.cleanup()
 	rd.mu.Unlock()
 
-	entry.mu.Lock()
-	if entry.done {
-		res, err := cloneRes(entry.res), entry.err
-		entry.mu.Unlock()
-		return res, err
-	}
-	entry.mu.Unlock()
-
 	res, err := fn()
+
+	// Read the response body before storing and cloning
+	// so that all waiters get a copy of the fully-read body.
+	if res != nil && err == nil && res.responseBody == nil && res.resp != nil && res.resp.Body != nil {
+		res.ToBytes()
+	}
 
 	entry.mu.Lock()
 	entry.res = res
