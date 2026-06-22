@@ -16,7 +16,7 @@ import (
 func TestTokenBucketBasic(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
-	tb := limiter.NewTokenBucket(10, 5)
+	tb := limiter.NewTokenBucketLimiter(10, 5)
 
 	for i := 0; i < 5; i++ {
 		allowed, _ := tb.Allow("test")
@@ -31,7 +31,7 @@ func TestTokenBucketBasic(tt *testing.T) {
 func TestTokenBucketRefill(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
-	tb := limiter.NewTokenBucket(100, 2)
+	tb := limiter.NewTokenBucketLimiter(100, 2)
 
 	allowed, _ := tb.Allow("refill")
 	t.EqualTrue(allowed)
@@ -51,7 +51,7 @@ func TestTokenBucketRefill(tt *testing.T) {
 func TestTokenBucketGlobal(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
-	tb := limiter.NewTokenBucket(10, 3)
+	tb := limiter.NewTokenBucketLimiter(10, 3)
 
 	for i := 0; i < 3; i++ {
 		allowed, _ := tb.AllowGlobal()
@@ -65,7 +65,7 @@ func TestTokenBucketGlobal(tt *testing.T) {
 func TestTokenBucketMultipleKeys(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
-	tb := limiter.NewTokenBucket(10, 2)
+	tb := limiter.NewTokenBucketLimiter(10, 2)
 
 	for i := 0; i < 2; i++ {
 		allowed, _ := tb.Allow("key1")
@@ -85,7 +85,7 @@ func TestTokenBucketMultipleKeys(tt *testing.T) {
 func TestTokenBucketReset(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
-	tb := limiter.NewTokenBucket(10, 1)
+	tb := limiter.NewTokenBucketLimiter(10, 1)
 
 	allowed, _ := tb.Allow("reset")
 	t.EqualTrue(allowed)
@@ -102,7 +102,7 @@ func TestTokenBucketReset(tt *testing.T) {
 func TestTokenBucketResetAll(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
-	tb := limiter.NewTokenBucket(10, 1)
+	tb := limiter.NewTokenBucketLimiter(10, 1)
 
 	tb.Allow("a")
 	tb.Allow("b")
@@ -249,7 +249,7 @@ func TestTokenBucketMiddlewareCustomOverflow(tt *testing.T) {
 func TestTokenBucketConcurrent(tt *testing.T) {
 	t := zlsgo.NewTest(tt)
 
-	tb := limiter.NewTokenBucket(100, 100)
+	tb := limiter.NewTokenBucketLimiter(100, 100)
 
 	var wg sync.WaitGroup
 	var success, fail int64

@@ -70,7 +70,7 @@ func (log *Logger) outputJSON(level int, s string, isWrap bool, calldDepth int, 
 	}
 
 	if log.flag&(BitShortFile|BitLongFile) != 0 {
-		file, line := log.fileLocation(calldDepth)
+		file, line := log.fileLocation(calldDepth + 1)
 		if file != "" {
 			if log.flag&BitShortFile != 0 {
 				lastSlash := -1
@@ -228,25 +228,22 @@ func (log *Logger) logJSON(level int, msg string, extraFields ...JSONFields) {
 	}
 
 	if log.flag&(BitShortFile|BitLongFile) != 0 {
-		var ok bool
-		_, file, line, ok := runtime.Caller(log.calldDepth)
-		if !ok {
-			file = "unknown-file"
-			line = 0
-		}
-		if log.flag&BitShortFile != 0 {
-			lastSlash := -1
-			for i := len(file) - 1; i >= 0; i-- {
-				if file[i] == '/' {
-					lastSlash = i
-					break
+		file, line := log.fileLocation(log.calldDepth)
+		if file != "" {
+			if log.flag&BitShortFile != 0 {
+				lastSlash := -1
+				for i := len(file) - 1; i >= 0; i-- {
+					if file[i] == '/' {
+						lastSlash = i
+						break
+					}
+				}
+				if lastSlash >= 0 {
+					file = file[lastSlash+1:]
 				}
 			}
-			if lastSlash >= 0 {
-				file = file[lastSlash+1:]
-			}
+			fields["caller"] = file + ":" + strconv.Itoa(line)
 		}
-		fields["caller"] = file + ":" + strconv.Itoa(line)
 	}
 
 	if log.prefix != "" {

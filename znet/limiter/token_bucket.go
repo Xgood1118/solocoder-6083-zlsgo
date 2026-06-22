@@ -60,7 +60,7 @@ type TokenBucketLimiter struct {
 	capacity int64
 }
 
-func NewTokenBucket(rate float64, capacity int64) *TokenBucketLimiter {
+func NewTokenBucketLimiter(rate float64, capacity int64) *TokenBucketLimiter {
 	return &TokenBucketLimiter{
 		buckets:  make(map[interface{}]*tokenBucket),
 		rate:     rate,
